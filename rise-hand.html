@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>MoveNet Raise Hand</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+
+<style>
+body { margin:0; background:black; color:white; font-family:Arial; }
+#status {
+    position:fixed;
+    top:20px;
+    left:20px;
+    font-size:28px;
+    padding:15px;
+    background:#222;
+    border-radius:10px;
+}
+video { display:none; }
+canvas { position:absolute; top:0; left:0; }
+</style>
+</head>
+
+<body>
+
+<div id="status">👀 Следене...</div>
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+
+<script>
+
+let detector;
+let lastSignal = 0;
+const cooldown = 3000;
+
+async function init() {
+
+    const model = poseDetection.SupportedModels.MoveNet;
+
+    detector = await poseDetection.createDetector(model, {
+        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+    });
+
+    const video = document.getElementById("video");
+    const stream = await navigator.mediaDevices.getUserMedia({video:true});
+    video.srcObject = stream;
+
+    await video.play();
+
+    detect();
+}
+
+async function detect() {
+
+    const video = document.getElementById("video");
+    const poses = await detector.estimatePoses(video);
+
+    if (poses.length > 0) {
+
+        const keypoints = poses[0].keypoints;
+
+        const leftWrist = keypoints.find(p => p.name === "left_wrist");
+        const rightWrist = keypoints.find(p => p.name === "right_wrist");
+        const nose = keypoints.find(p => p.name === "nose");
+
+        if (leftWrist && rightWrist && nose) {
+
+            const handUp =
+                (leftWrist.y < nose.y && leftWrist.score > 0.4) ||
+                (rightWrist.y < nose.y && rightWrist.score > 0.4);
+
+            if (handUp && Date.now() - lastSignal > cooldown) {
+                lastSignal = Date.now();
+                document.getElementById("status").innerText = "🙋 РЪКА ГОРЕ!";
+                beep();
+
+                setTimeout(()=>{
+                    document.getElementById("status").innerText = "👀 Следене...";
+                },2000);
+            }
+        }
+    }
+
+    requestAnimationFrame(detect);
+}
+
+function beep(){
+    const audio = new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg");
+    audio.play();
+}
+
+init();
+
+</script>
+
+</body>
+</html>
